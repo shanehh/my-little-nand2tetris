@@ -1,0 +1,7 @@
+{
+    "files.exclude": {
+        "**/*.out": true,
+        "**/*.tst": true,
+        "**/*.cmp": true,
+      },
+}
