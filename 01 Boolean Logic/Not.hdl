@@ -13,5 +13,20 @@ CHIP Not {
     OUT out;
 
     PARTS:
-    // Put your code here:
+    // Nand gate:
+    // a    b   out
+    // ------------
+    // 0    0   1
+    // 0    1   1
+    // 1    0   1
+    // 1    1   0
+
+    // not 只有一个 input，而 nand 有两个
+    // 两个变一个，就是 a, b 相同的情况
+    // Nand gate when a == b:
+    // a    b   out
+    // ------------
+    // 0    0   1
+    // 1    1   0
+    Nand(a=in, b=in, out=out);
 }
