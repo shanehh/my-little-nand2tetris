@@ -16,5 +16,14 @@ CHIP PC {
     OUT out[16];
 
     PARTS:
-    // Put your code here:
+    Inc16(in=feedback, out=addOne);
+    // default is feedback(out[t])
+    // inc
+    Mux16(a=feedback, b=addOne, sel=inc, out=o1);
+    // load
+    Mux16(a=o1, b=in, sel=load, out=o2);
+    // reset
+    Mux16(a=o2, b=false, sel=reset, out=o3);
+
+    Register(in=o3, load=true, out=feedback, out=out);
 }

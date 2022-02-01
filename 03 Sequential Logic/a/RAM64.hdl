@@ -4,7 +4,7 @@
 // File name: projects/03/a/RAM64.hdl
 
 /**
- * Memory of 64 registers, each 16 bit-wide. Out holds the value
+ * Memory of 64 s, each 16 bit-wide. Out holds the value
  * stored at the memory location specified by address. If load==1, then 
  * the in value is loaded into the memory location specified by address 
  * (the loaded value will be emitted to out from the next time step onward).
@@ -15,5 +15,21 @@ CHIP RAM64 {
     OUT out[16];
 
     PARTS:
-    // Put your code here:
+    // 为什么应该是先 3..5
+    // 再 0..2?
+    // 
+    // 让 memory 在物理上也保持连续
+    
+    DMux8Way(in=load, sel=address[3..5], a=l0, b=l1, c=l2, d=l3, e=l4, f=l5, g=l6, h=l7);
+    
+    RAM8(in=in, load=l0, address=address[0..2],out=o0);
+    RAM8(in=in, load=l1, address=address[0..2],out=o1);
+    RAM8(in=in, load=l2, address=address[0..2],out=o2);
+    RAM8(in=in, load=l3, address=address[0..2],out=o3);
+    RAM8(in=in, load=l4, address=address[0..2],out=o4);
+    RAM8(in=in, load=l5, address=address[0..2],out=o5);
+    RAM8(in=in, load=l6, address=address[0..2],out=o6);
+    RAM8(in=in, load=l7, address=address[0..2],out=o7);
+
+    Mux8Way16(a=o0, b=o1, c=o2, d=o3, e=o4, f=o5, g=o6, h=o7, sel=address[3..5], out=out);
 }
