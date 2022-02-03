@@ -9,4 +9,43 @@
 // This program only needs to handle arguments that satisfy
 // R0 >= 0, R1 >= 0, and R0*R1 < 32768.
 
-// Put your code here.
+// persudo code
+// 
+// i = 0
+// R2 = 0
+// while i < R0:
+//     R2 += R1
+//     i ++
+// 
+
+    @i
+    M = 0
+    @R2
+    M = 0
+
+(LOOP)
+    // while i < R0
+    @i
+    D = M
+    @R0
+    D = D - M
+    @END
+    D;JGE
+
+    // R2 += R1
+    @R1
+    D = M
+    @R2
+    M = M + D
+
+    // i ++
+    @i
+    M = M + 1
+
+    @LOOP
+    0;JMP
+    
+(END)
+    @END
+    0;JMP
+    
