@@ -27,5 +27,32 @@ CHIP Memory {
     OUT out[16];
 
     PARTS:
-    // Put your code here:
+    // 1. memory distribution
+    // 16K == 2 ** 14
+    // so.. (F equals 1111)
+    // 0000 000 RAM start
+    // 0011 FFF RAM end
+
+    // 8K == 2 ** 13
+    // 0100 000 Screen start
+    // 0101 FFF Screen end
+
+    // one register for keyboard
+    // 0110 000 Keyboard
+
+    // 2. obersvation the diff
+    // for [13..14]
+    // 00 -> RAM
+    // 01 -> RAM
+    // 10 -> Screen
+    // 11 -> Keyboard
+    
+    DMux4Way(in=load, sel=address[13..14], a=loadRAMa, b=loadRAMb, c=loadScreen, d=loadKeyboard);
+    Or(a=loadRAMa, b=loadRAMb, out=loadRAM);
+
+    RAM16K(in=in, load=loadRAM, address=address[0..13], out=outRAM);
+    Screen(in=in, load=loadScreen, address=address[0..12], out=outScreen);
+    Keyboard(out=outKeyboard);
+
+    Mux4Way16(a=outRAM, b=outRAM, c=outScreen, d=outKeyboard, sel=address[13..14], out=out);
 }
