@@ -3,5 +3,6 @@
         "**/*.out": true,
         "**/*.tst": true,
         "**/*.cmp": true,
+        "**/*.hack": true,
       },
 }
