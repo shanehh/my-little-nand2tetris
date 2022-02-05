@@ -25,6 +25,31 @@
  * than to the address resulting from executing the current instruction. 
  */
 
+/**
+ * lets decode c-instruction
+ * dest=comp;jump
+ * 
+ * 111 a c1 c2 c3 c4 c5 c6 d1 d2 d3 j1 j2 j3
+ * 
+ * 1. a-bit select A or M feed into ALU
+ * 2. c-bits all routes to ALU as control-bits
+ * 3. d-bits means destinations
+ *      d1   d2  d3
+ *      A    D   M
+ * 4. j-bits whether to jump to A out
+ *      j1   j2  j3
+ *      <0   =0  >0
+ *
+ *
+ * 5. Another question is..
+ * when `isAinstruction`, what ALU do?
+ *
+ * answer: just non sense
+ * but fortunately, loadA, loadD and writeM is
+ * always depend on isCinstruction
+ * so A, D and M will be not fed the nonsense out.
+ */
+
 CHIP CPU {
 
     IN  inM[16],         // M value input  (M = contents of RAM[A])
@@ -39,5 +64,75 @@ CHIP CPU {
         pc[15];          // address of next instruction
 
     PARTS:
-    // Put your code here:
+    // let's go!
+
+    // 1. get type of instruction
+    Not(in=instruction[15], out=isAinstruction);
+    Not(in=isAinstruction, out=isCinstruction);
+
+    // 2. processing A
+    // 
+    // The question is..
+    // should instruction or ALU output feed into A?
+    // 
+    // if isCinstruction and isADest?
+    //     ALUout -> A
+    // elif is isCinstruction?
+    //     instruction -> A (the only way to load const
+    //                      can only 15..bits actually)
+    And(a=isCinstruction, b=instruction[5], out=isADest);
+    Mux16(a=instruction, b=ALUout, sel=isADest, out=Ain);
+
+    // load A, if isAinstruction or (isCinstruction and isADest)
+    Or(a=isAinstruction, b=isADest, out=loadA);
+    ARegister(in=Ain, load=loadA, out=Aout);
+
+    // 3. select A or M based on a-bit
+    Mux16(a=Aout, b=inM, sel=instruction[12], out=AorMout);   
+
+    // 4. load the D from ALU
+    And(a=isCinstruction, b=instruction[4], out=loadD);
+    DRegister(in=ALUout, load=loadD, out=Dout);
+
+    // 5. calculate
+    ALU(
+        // input D, (A or M)
+        x=Dout,
+        y=AorMout,
+        
+        // set comp-bits
+        zx=instruction[11], nx=instruction[10], zy=instruction[9], ny=instruction[8], f=instruction[7], no=instruction[6],
+
+        // outs
+        out=ALUout,
+        zr=isZero, ng=isNegative
+    );
+
+    // 6. processing M
+    // should writeM?
+    And(a=isCinstruction, b=instruction[3], out=writeM);
+    // sub-bus Aout to addressM
+    Or16(a=false, b=Aout, out[0..14]=addressM);
+    // ALUout to outM
+    Or16(a=false, b=ALUout, out=outM);
+
+    // 7. jump bits
+    // 
+    // =0
+    And(a=instruction[1], b=isZero, out=jeq);
+    // <0
+    And(a=instruction[2], b=isNegative, out=jlt);
+    // >0
+    Or(a=isZero, b=isNegative, out=zeroOrNegative);
+    Not(in=zeroOrNegative, out=isPositive);
+    And(a=instruction[0], b=isPositive, out=jgt);
+    // <=0
+    Or(a=jlt, b=jeq, out=jle);
+    // <=0 or >0 means doJumpToA?
+    Or(a=jle, b=jgt, out=doJumpToA);
+    // Only jump if C instruction
+    And(a=isCinstruction, b=doJumpToA, out=loadPC);
+    // if not jump to A, only increment
+    Not(in=loadPC, out=incPC);
+    PC(in=Aout, load=loadPC, inc=incPC, reset=reset, out[0..14]=pc);
 }
