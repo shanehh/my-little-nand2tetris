@@ -111,7 +111,10 @@ class Instruction:
         return not self.value.isdigit()
 
     def __repr__(self) -> str:
-        return self.ins
+        if self.type == self.A and self.is_symbol:
+            return f"@{symbol_table[self.value]}"
+        else:
+            return self.ins
 
 
 class Code:
