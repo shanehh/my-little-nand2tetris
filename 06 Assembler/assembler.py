@@ -190,8 +190,9 @@ class Parser:
         """
         strip and skip comment, empty line
         """
+        code = map(lambda line: line.split("//")[0], code)
         code = map(str.strip, code)
-        return self.skip(code, lambda line: line.startswith("//") or len(line) == 0)
+        return self.skip(code, lambda line: len(line) == 0)
 
     def first_pass(self, code):
         address = 0
