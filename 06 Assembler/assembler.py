@@ -200,6 +200,7 @@ class Parser:
     def first_pass(self, code):
         address = 0
 
+        symbols = []
         for line in code:
             # is Label declaration?
             if line.startswith("("):
@@ -208,19 +209,19 @@ class Parser:
                 symbol_table[label] = address
             else:
                 if (ins := Instruction(line)).type == "A" and ins.is_symbol:
-                    symbol = ins.value
-                    symbol_table.add(symbol)
-
+                    symbols.append(ins.value)
                 address += 1
+
+        # add symbol should be after adding labels.
+        for symbol in symbols:
+            symbol_table.add(symbol)
 
     def instructions(self):
         with open(self.filepath, "rt") as code:
             self.first_pass(self.tidy(code))
 
             code.seek(0)
-            code = self.tidy(code)
-
-            for line in self.skip(code, lambda line: line.startswith("(")):
+            for line in self.skip(self.tidy(code), lambda line: line.startswith("(")):
                 yield Instruction(line)
 
 
