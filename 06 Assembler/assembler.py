@@ -1,8 +1,10 @@
 from functools import wraps
 from pathlib import Path
+from typing import Dict, Iterable, Callable
+from os import PathLike
 
 
-class SymbolTable(dict):
+class SymbolTable(Dict[str, int]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -19,15 +21,14 @@ class SymbolTable(dict):
 
         self._symbol_count = 16
 
-    def add(self, symbol: str):
+    def add(self, symbol: str) -> None:
         if symbol in self:
-            return
+            pass
         else:
             self[symbol] = self._symbol_count
             self._symbol_count += 1
 
 
-# <symbol: str, address: int>
 symbol_table = SymbolTable()
 
 
@@ -179,36 +180,38 @@ class Code:
 
 
 class Parser:
-    def __init__(self, filepath: str):
+    def __init__(self, filepath: PathLike):
         self.filepath = filepath
 
-    def skip(self, code, predicate):
+    def skip(self, code: Iterable[str], predicate: Callable[[str], bool]):
         for line in code:
             if predicate(line):
                 continue
             else:
                 yield line
 
-    def tidy(self, code):
+    def tidy(self, code: Iterable[str]):
         """
         strip and skip comment, empty line
         """
         code = map(lambda line: line.split("//")[0], code)
         code = map(str.strip, code)
-        return self.skip(code, lambda line: len(line) == 0)
+        # skip empty
+        code = self.skip(code, lambda line: len(line) == 0)
+        return code
 
-    def first_pass(self, code):
+    def first_pass(self, code: Iterable[str]):
         address = 0
 
         symbols = []
         for line in code:
             # is Label declaration?
             if line.startswith("("):
-                # "( foo bar) )" -> "foo bar"
-                label = line.strip(" ()")
+                label = line.strip(" ()")  # e.g. "( foo bar) )" -> "foo bar"
                 symbol_table[label] = address
             else:
-                if (ins := Instruction(line)).type == "A" and ins.is_symbol:
+                ins = Instruction(line)
+                if ins.type == "A" and ins.is_symbol:
                     symbols.append(ins.value)
                 address += 1
 
@@ -216,13 +219,16 @@ class Parser:
         for symbol in symbols:
             symbol_table.add(symbol)
 
+    def two_pass(self, code: Iterable[str]):
+        code = self.skip(code, lambda line: line.startswith("("))
+        for line in code:
+            yield Instruction(line)
+
     def instructions(self):
         with open(self.filepath, "rt") as code:
             self.first_pass(self.tidy(code))
-
             code.seek(0)
-            for line in self.skip(self.tidy(code), lambda line: line.startswith("(")):
-                yield Instruction(line)
+            yield from self.two_pass(self.tidy(code))
 
 
 if __name__ == "__main__":
