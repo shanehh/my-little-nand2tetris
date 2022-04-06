@@ -37,6 +37,11 @@ class Instruction:
     C = "C"
 
     def __init__(self, instruction: str):
+        # first, we need to remove space
+        # "D = D + A" -> "D=D+A"
+        instruction = filter(lambda char: not char.isspace(), instruction)
+        instruction = "".join(instruction)
+
         self.ins = instruction
 
         if instruction.startswith("@"):
