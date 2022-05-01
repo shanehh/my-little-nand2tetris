@@ -1,10 +1,10 @@
 from functools import wraps
 from pathlib import Path
-from typing import Dict, Iterable, Callable
+from typing import Iterable, Callable
 from os import PathLike
 
 
-class SymbolTable(Dict[str, int]):
+class SymbolTable(dict[str, int]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
