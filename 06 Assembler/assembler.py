@@ -240,7 +240,7 @@ if __name__ == "__main__":
     import sys
 
     asm_file = Path(sys.argv[1])
-    hack_file = asm_file.with_suffix(".hack")
+    hack_file = (Path(".") / asm_file.name).with_suffix(".hack")
 
     with open(hack_file, "wt+") as out:
         for ins in Parser(asm_file).instructions():
