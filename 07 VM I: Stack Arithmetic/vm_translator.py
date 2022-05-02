@@ -39,6 +39,23 @@ operator_symbols = {
 }
 
 
+class IncrementTable:
+    def __init__(self):
+        self.store: dict[int, int] = {}
+        self.count = 0
+
+    def get(self, index: int) -> int:
+        if index in self.store:
+            return self.store[index]
+        else:
+            self.store[index] = self.count
+            self.count += 1
+            return self.store[index]
+
+
+increment_table = IncrementTable()
+
+
 class Label:
     """generate label with index to avoid name conflicts
     {name}.{index}
@@ -165,6 +182,20 @@ class Translator:
                         yield "M=D"
                     case "push":
                         yield "@{}".format(register)
+                        yield "D=M"
+                        yield from self.stack_push("D")
+
+            case "static":
+                assert 0 <= index <= 255 - 16 + 1
+                # figure out actual index
+                index = registers[segment] + increment_table.get(index)
+                match action:
+                    case "pop":
+                        yield from self.stack_pop("D")
+                        yield "@{}".format(index)
+                        yield "M=D"
+                    case "push":
+                        yield "@{}".format(index)
                         yield "D=M"
                         yield from self.stack_push("D")
 
