@@ -153,6 +153,21 @@ class Translator:
                         yield address
                         yield "M=D"
 
+            case "pointer":
+                assert 0 <= index <= 1
+                # actual segment
+                segment = "this" if index == 0 else "that"
+                register = registers[segment]
+                match action:
+                    case "pop":
+                        yield from self.stack_pop("D")
+                        yield "@{}".format(register)
+                        yield "M=D"
+                    case "push":
+                        yield "@{}".format(register)
+                        yield "D=M"
+                        yield from self.stack_push("D")
+
             case "local" | "argument" | "this" | "that":
                 if action == "pop":
                     # pop to D
@@ -248,7 +263,7 @@ if __name__ == "__main__":
     with open(asm_file, "wt+") as out:
         for code in translator.init():
             out.write(code + "\n")
-        
+
         for tokens in Parser(vm_file).commands():
             for code in translator.translate(tokens):
                 out.write(code + "\n")
