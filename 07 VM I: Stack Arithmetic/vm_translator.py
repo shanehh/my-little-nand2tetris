@@ -12,14 +12,18 @@ from enum import Enum
 from collections import defaultdict
 
 
-#     # "constant": 
-# {
-#     "local": 1,
-#     "argument": 2,
-#     "this": 3,
-#     "that": 4,
-#     "temp": 5
-# }
+# vm segement to assemble pre-defined register
+registers = {
+    # virtual segments
+    "local": "LCL",
+    "argument": "ARG",
+    "this": "THIS",
+    "that": "THAT",
+    # 
+    "pointer": 3,
+    "temp": 5,
+    "static": 16,
+}
 
 # vm commands to assemble operator
 operator_symbols = {
@@ -125,11 +129,63 @@ class Parser:
         for line in self.read_code():
             tokens = line.split()
             match tokens:
-                case ["push", segment, index]:
-                    assert segment == "constant"
-                    yield f"@{index}"
-                    yield "D=A"
-                    yield from Stack.push("D")
+                case ["push" | "pop" as action, segment, index]:
+                    match segment:
+                        case "constant":
+                            assert action != "pop"
+                            yield f"@{index}"
+                            yield "D=A"
+                            yield from Stack.push("D")
+                        case "temp":
+                            index = int(index)
+                            assert 0 <= index <= 7
+
+                            match action:
+                                case "push":
+                                    yield "@{}".format(registers[segment] + index)
+                                    yield "D=M"
+                                    yield from Stack.push("D")
+                                case "pop":
+                                    yield from Stack.pop("D")
+                                    yield "@{}".format(registers[segment] + index)
+                                    yield "M=D"
+                            
+                        case "local" | "argument" | "this" | "that":
+
+                            if action == "pop":
+                                # pop to D
+                                # and save it to R13
+                                yield from Stack.pop("D")
+                                yield "@R13"
+                                yield "M=D"
+                                
+                                # load const
+                                yield f"@{index}"
+                                yield "D=A"
+                                
+                                # save address (M[pointer] + index) to R14
+                                yield "@{}".format(registers[segment])
+                                yield "D=D+M"
+                                yield "@R14"
+                                yield "M=D"
+                                
+                                # M[M[R14]] = M[R13]
+                                yield "@R13"
+                                yield "D=M"
+
+                                yield "@R14"
+                                yield "A=M"
+                                yield "M=D"
+                            elif action == "push":
+                                # load const
+                                yield f"@{index}"
+                                yield "D=A"
+                                yield "@{}".format(registers[segment])
+                                yield "A=D+M"
+                                yield "D=M"
+                                yield from Stack.push("D")
+
+                            
                 case [operator]:
                     match operator:
                         case "add" | "sub" | "and" | "or":
