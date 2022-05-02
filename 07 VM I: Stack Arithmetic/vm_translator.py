@@ -11,18 +11,6 @@ from os import PathLike
 from enum import Enum
 from collections import defaultdict
 
-count = defaultdict(int)
-def label(name :str) -> str:
-    """generate label with index to avoid name conflicts
-
-    Args:
-        name (str): the name of the label
-
-    Returns:
-        str: {name}.{index}
-    """
-    count[name] += 1
-    return f"{name}.{count[name]}"
 
 #     # "constant": 
 # {
@@ -33,14 +21,32 @@ def label(name :str) -> str:
 #     "temp": 5
 # }
 
+# vm commands to assemble operator
 operator_symbols = {
     "add": "+",
     "sub": "-",
     "and": "&",
     "or": "|",
     "neg": "-",
-    "not": "!"
+    "not": "!",
+    "eq": "JEQ",
+    "lt": "JLT",
+    "gt": "JGT",
 }
+
+class Label:
+    """generate label with index to avoid name conflicts
+    {name}.{index}
+    """
+
+    count = defaultdict(int)
+    
+    def __init__(self, name) -> None:
+        label = f"{name}.{self.count[name]}".upper()
+        self.count[name] += 1
+
+        self.address = "@{}".format(label)
+        self.define = "({})".format(label)
 
 
 class Stack:
@@ -154,27 +160,21 @@ class Parser:
                             # have to M-D
                             # because x is under the y, or x is pushed first
                             yield from Stack.pop("D=M-D")
-                            set_true =label("set_true")
+                            set_true =Label("set_true")
 
-                            yield f"@{set_true}"
-                            match operator:
-                                case "eq":
-                                    yield "D;JEQ"
-                                case "lt":
-                                    yield "D;JLT"
-                                case "gt":
-                                    yield "D;JGT"
-
-                            endjump =label("endjump")
+                            yield set_true.address
+                            yield "D;{}".format(operator_symbols[operator])
+                            
+                            endjump =Label("endjump")
                             # default: set_false
                             yield from Stack.push("0")
-                            yield f"@{endjump}"
+                            yield endjump.address
                             yield "0;JMP"
                             
-                            yield f"({set_true})"
+                            yield set_true.define
                             yield from Stack.push("-1")
 
-                            yield f"({endjump})"
+                            yield endjump.define
                 
                 case _:
                     raise Exception(f"WTF is {tokens}")
