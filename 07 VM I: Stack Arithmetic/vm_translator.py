@@ -9,6 +9,20 @@ from pathlib import Path
 from typing import Iterable, Callable
 from os import PathLike
 from enum import Enum
+from collections import defaultdict
+
+count = defaultdict(int)
+def label(name :str) -> str:
+    """generate label with index to avoid name conflicts
+
+    Args:
+        name (str): the name of the label
+
+    Returns:
+        str: {name}.{index}
+    """
+    count[name] += 1
+    return f"{name}.{count[name]}"
 
 #     # "constant": 
 # {
@@ -100,21 +114,80 @@ class Parser:
 
         
         for line in self.read_code():
-            token = line.split()
-            match token:
+            tokens = line.split()
+            match tokens:
                 case ["push", segment, index]:
                     assert segment == "constant"
                     yield f"@{index}"
                     yield "D=A"
                     yield from Stack.push("D")
+                case [operator]:
+                    match operator:
+                        case "add" | "sub" | "and" | "or":
+                            yield from Stack.pop("D")
+                            match operator:
+                                case "add":
+                                    yield from Stack.pop("D=M+D")
+                                case "sub":
+                                    yield from Stack.pop("D=M-D")
+                                case "and":
+                                    yield from Stack.pop("D=M&D")
+                                case "or":
+                                    yield from Stack.pop("D=M|D")
 
-                case ["add"]:
-                    yield from Stack.pop("D")
-                    yield from Stack.pop("D=M+D")
-                    yield from Stack.push("D")
+                            yield from Stack.push("D")
 
+                        case "neg" | "not":
+                            yield from Stack.pop("D")
+                            match operator:
+                                case "neg":
+                                    yield "D=-D"
+                                case "not":
+                                    yield "D=!D"
+                            yield from Stack.push("D")
+
+                        case "eq" | "lt" | "gt":
+                            """
+                            algorithm:
+                            
+                            if true
+                                goto set_true
+                            (set_false)
+                                push 0
+                                goto endjump
+                            (set_true)
+                                push -1
+                            (endjump)
+                            """
+                            
+                            yield from Stack.pop("D")
+                            # have to M-D
+                            # because x is under the y, or x is pushed first
+                            yield from Stack.pop("D=M-D")
+                            set_true =label("set_true")
+
+                            yield f"@{set_true}"
+                            match operator:
+                                case "eq":
+                                    yield "D;JEQ"
+                                case "lt":
+                                    yield "D;JLT"
+                                case "gt":
+                                    yield "D;JGT"
+
+                            endjump =label("endjump")
+                            # default: set_false
+                            yield from Stack.push("0")
+                            yield f"@{endjump}"
+                            yield "0;JMP"
+                            
+                            yield f"({set_true})"
+                            yield from Stack.push("-1")
+
+                            yield f"({endjump})"
+                
                 case _:
-                    raise Exception(f"WTF is {token}")
+                    raise Exception(f"WTF is {tokens}")
 
 
 
