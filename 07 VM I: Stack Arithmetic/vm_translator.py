@@ -33,11 +33,14 @@ def label(name :str) -> str:
 #     "temp": 5
 # }
 
-# push constant 7
-# ->
-# RAM[SP] = 7
-# SP += 1
-SP = 256
+operator_symbols = {
+    "add": "+",
+    "sub": "-",
+    "and": "&",
+    "or": "|",
+    "neg": "-",
+    "not": "!"
+}
 
 
 class Stack:
@@ -125,25 +128,12 @@ class Parser:
                     match operator:
                         case "add" | "sub" | "and" | "or":
                             yield from Stack.pop("D")
-                            match operator:
-                                case "add":
-                                    yield from Stack.pop("D=M+D")
-                                case "sub":
-                                    yield from Stack.pop("D=M-D")
-                                case "and":
-                                    yield from Stack.pop("D=M&D")
-                                case "or":
-                                    yield from Stack.pop("D=M|D")
-
+                            yield from Stack.pop("D=M{}D".format(operator_symbols[operator]))
                             yield from Stack.push("D")
 
                         case "neg" | "not":
                             yield from Stack.pop("D")
-                            match operator:
-                                case "neg":
-                                    yield "D=-D"
-                                case "not":
-                                    yield "D=!D"
+                            yield "D={}D".format(operator_symbols[operator])
                             yield from Stack.push("D")
 
                         case "eq" | "lt" | "gt":
