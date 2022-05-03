@@ -2,9 +2,11 @@ from functools import wraps
 from pathlib import Path
 from typing import Iterable, Callable
 from os import PathLike
+from collections import UserDict
 
-
-class SymbolTable(dict[str, int]):
+# why UserDict?
+# see https://stackoverflow.com/questions/7148419/subclass-dict-userdict-dict-or-abc
+class SymbolTable(UserDict[str, int]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
