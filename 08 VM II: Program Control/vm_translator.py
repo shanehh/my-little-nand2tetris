@@ -116,7 +116,7 @@ class Translator:
 
         Args:
             const (int): a number
-            to (str, optional): the name of register. Defaults to "D".
+            to (str, optional): the name of register.
         """
         yield "@{}".format(const)
         yield "D=A"
@@ -292,8 +292,78 @@ class Translator:
         yield f"@{label_name}"
         yield "D;JNE"
 
+    def function(self, name: str, n_vars: int):
+        """
+        (f)                 // injects a function entry label into the code
+        repeat nVars times: // nVars = number of local variables
+            push 0          // initializes the local variables to 0
+        """
+        # function name
+        yield f"({name})"
+        for _ in range(n_vars):
+            yield from self.stack_push("0")
+
+    def ret(self):
+        """
+        endFrame = LCL              // endframe is a temporary variable
+        retAddr = *(endFrame - 5)   // gets the return address
+        *ARG = pop()                // repositions the return value for the caller
+        SP = ARG + 1                // repositions SP of the caller
+        THAT = *(endFrame - 1)      // restores THAT of the caller
+        THIS = *(endFrame - 2)      // restores THIS of the caller
+        ARG = *(endFrame - 3)       // restores ARG of the caller
+        LCL = *(endFrame - 4)       // restores LCL of the caller
+        goto retAddr                // goes to the caller's return address
+        """
+        # let's *ARG = pop()// repositions the return value for the caller
+        yield from self.stack_pop("D")
+        yield "@ARG"
+        yield "A=M"
+        yield "M=D"
+        # yield from self.translate(["pop","argument", "0"])
+
+        # SP = ARG + 1 // repositions SP of the caller
+        yield "@ARG"
+        yield "D=M+1"
+        yield "@SP"
+        yield "M=D"
+
+        # endFrame(R13) = LCL // endframe is a temporary variable
+        yield "@LCL"
+        yield "D=M"
+        yield "@R13"
+        yield "M=D"
+
+        saved_registers = {
+            "THAT": 1,
+            "THIS": 2,
+            "ARG": 3,
+            "LCL": 4,
+            "R14": 5,
+        }
+
+        for register, offset in saved_registers.items():
+            yield "@R13"  # endFrame
+            yield "D=M"
+            if offset == 1:
+                yield "D=D-1"
+            else:
+                yield f"@{offset}"
+                yield "D=D-A"
+            yield "A=D"
+            yield "D=M"
+            yield f"@{register}"
+            yield "M=D"
+
+        # goto *R13
+        yield "@R13"
+        yield "A=M"
+        yield "0;JMP"
+
     def translate(self, tokens: list[str]):
         match tokens:
+            case ["return"]:
+                yield from self.ret()
             case ["push" | "pop" as action, segment, index]:
                 yield from self.push_pop(action, segment, int(index))
             case ["label", name]:
@@ -304,6 +374,8 @@ class Translator:
                 yield from self.if_goto(label_name)
             case [operator]:
                 yield from self.arithmetic(operator)
+            case ["function", name, n_vars]:
+                yield from self.function(name, int(n_vars))
             case _:
                 raise Exception(f"WTF is {tokens}")
 
