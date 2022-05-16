@@ -124,14 +124,20 @@ class Translator:
             yield "@{}".format(to)
             yield "M=D"
 
+    def address_pointer(self, register: str):
+        """
+        *register
+        """
+        yield f"@{register}"
+        yield "A=M"
+
     def stack_push(self, what: str):
         """
         set the value of the tip of stack
         and move forward
         """
         # M[M[SP]] = D  // ok, we know SP == 0
-        yield "@SP"
-        yield "A=M"
+        yield from self.address_pointer("SP")
         yield f"M={what}"
 
         # SP = SP + 1
@@ -147,8 +153,7 @@ class Translator:
         yield "@SP"
         yield "M=M-1"
 
-        yield "@SP"
-        yield "A=M"
+        yield from self.address_pointer("SP")
         if "=" in what:
             yield what
         else:
@@ -224,8 +229,7 @@ class Translator:
                     yield "@R13"
                     yield "D=M"
 
-                    yield "@R14"
-                    yield "A=M"
+                    yield from self.address_pointer("R14")
                     yield "M=D"
                 elif action == "push":
                     yield from self.load_const(index, "D")
@@ -326,11 +330,11 @@ class Translator:
         goto retAddr                // goes to the caller's return address
         """
         # let's *ARG = pop()// repositions the return value for the caller
+        # also can write as:
+        # # yield from self.translate(["pop","argument", "0"])
         yield from self.stack_pop("D")
-        yield "@ARG"
-        yield "A=M"
+        yield from self.address_pointer("ARG")
         yield "M=D"
-        # yield from self.translate(["pop","argument", "0"])
 
         # SP = ARG + 1 // repositions SP of the caller
         yield "@ARG"
@@ -366,8 +370,7 @@ class Translator:
             yield "M=D"
 
         # goto *R13
-        yield "@R13"
-        yield "A=M"
+        yield from self.address_pointer("R13")
         yield "0;JMP"
 
     def translate(self, tokens: list[str]):
