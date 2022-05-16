@@ -281,13 +281,23 @@ class Translator:
                 yield endjump.define
 
     def label(self, name: str):
+        """
+        label declaration command
+        """
         yield f"({name})"
 
     def goto(self, label_name: str):
+        """
+        // jump to execute the command just after label
+        """
         yield f"@{label_name}"
         yield "0;JMP"
 
     def if_goto(self, label_name: str):
+        """
+        // cond = pop();
+        // if cond jump to execute the command just after label
+        """
         yield from self.stack_pop("D")
         yield f"@{label_name}"
         yield "D;JNE"
@@ -368,10 +378,10 @@ class Translator:
                 yield from self.push_pop(action, segment, int(index))
             case ["label", name]:
                 yield from self.label(name)
-            case ["goto", label_name]:
-                yield from self.goto(label_name)
-            case ["if-goto", label_name]:
-                yield from self.if_goto(label_name)
+            case ["goto", label]:
+                yield from self.goto(label)
+            case ["if-goto", label]:
+                yield from self.if_goto(label)
             case [operator]:
                 yield from self.arithmetic(operator)
             case ["function", name, n_vars]:
