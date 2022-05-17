@@ -353,7 +353,7 @@ class Translator:
             "THIS": 2,
             "ARG": 3,
             "LCL": 4,
-            "R14": 5,
+            "R14": 5, # return address
         }
 
         for register, offset in saved_registers.items():
@@ -369,8 +369,8 @@ class Translator:
             yield f"@{register}"
             yield "M=D"
 
-        # goto *R13
-        yield from self.address_pointer("R13")
+        # goto *R14
+        yield from self.address_pointer("R14")
         yield "0;JMP"
 
     def translate(self, tokens: list[str]):
