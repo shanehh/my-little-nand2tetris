@@ -11,7 +11,7 @@ versions of the VM translator but are not part of project 8.
 
 from collections import defaultdict
 from enum import Enum
-from functools import wraps
+from functools import cached_property, wraps
 from os import PathLike
 from pathlib import Path
 from typing import Callable, Iterable
@@ -67,13 +67,17 @@ class Label:
 
     count = defaultdict(int)
 
-    def __init__(self, name) -> None:
+    def __init__(self, name: str) -> None:
         label = f"{name}.{self.count[name]}".upper()
         self.count[name] += 1
-
         self.address = "@{}".format(label)
         self.define = "({})".format(label)
-        self.ret = Label(f"{name}$ret")
+
+        self._name = name
+
+    @cached_property
+    def ret(self):
+        return Label(f"{self._name}$ret")
 
 
 class Parser:
@@ -116,7 +120,14 @@ class Translator:
         later, when we discuss the OS), then it does call Main.main
         """
         yield from self.load_const(256, "SP")
-        yield from self.translate(["call", "Sys.init"])
+        # call Sys.init
+        # 其实也可以这样写
+        # # yield from self.translate(["goto", "Sys.init"])
+        # 因为没有什么 frame 需要 save 到 stack
+        # 但为了测试通过，还是像下面这样写好了
+        # 另外看 `./ProgramFlow/FibonacciSeries/FibonacciSeries.tst`
+        # 写着 `repeat 6000`，真有人实现那么啰嗦的 machine code 吗，lol!
+        yield from self.translate(["call", "Sys.init", "0"])
 
     def load_const(self, const: int, to: str):
         """load a const to an arbitrary register
@@ -380,7 +391,7 @@ class Translator:
         yield from self.address_pointer("R14")
         yield "0;JMP"
 
-    def call(self, function_name: str):
+    def call(self, function_name: str, n_args: int):
         """
         call Bar.mult 2
 
@@ -393,7 +404,38 @@ class Translator:
         """
         label = Label(function_name)
 
+        # push retAddrLabel // Using a translator-generated label
         yield label.ret.address
+        yield "D=A"
+        yield from self.stack_push("D")
+
+        # Saves registers of the caller
+        for register in ["LCL", "ARG", "THIS", "THAT"]:
+            yield f"@{register}"
+            yield "D=M"
+            yield from self.stack_push("D")
+
+        # ARG = SP-5-nArgs // Repositions ARG
+        yield "@SP"
+        yield "D=M"
+        yield "@5"
+        yield "D=D-A"
+        yield f"@{n_args}"
+        yield "D=D-A"
+        yield "@ARG"
+        yield "M=D"
+
+        # LCL = SP // Repositions LCL
+        yield "@SP"
+        yield "D=M"
+        yield "@LCL"
+        yield "M=D"
+
+        # goto functionName // Transfers control to the called function
+        yield from self.translate(["goto", function_name])
+
+        # (retAddrLabel) // the same translator-generated label
+        yield label.ret.define
 
     def translate(self, tokens: list[str]):
         match tokens:
@@ -411,9 +453,8 @@ class Translator:
                 yield from self.arithmetic(operator)
             case ["function", name, n_vars]:
                 yield from self.function(name, int(n_vars))
-            case ["call", name]:
-                raise Exception("todo")
-                # yield from self.call(name)
+            case ["call", name, n_args]:
+                yield from self.call(name, int(n_args))
             case _:
                 raise Exception(f"WTF is {tokens}")
 
@@ -423,7 +464,7 @@ if __name__ == "__main__":
 
     program_folder = Path(sys.argv[1])
     assert program_folder.is_dir()
-    asm_file = Path(".") / (program_folder.name + ".asm")
+    asm_file = program_folder / (program_folder.name + ".asm")
     translator = Translator()
     with open(asm_file, "wt+") as out:
         for code in translator.bootstrap():
