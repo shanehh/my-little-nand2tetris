@@ -9,13 +9,12 @@ error-free. Error checking, reporting, and handling can be added to later
 versions of the VM translator but are not part of project 8.
 """
 
-from functools import wraps
-from pathlib import Path
-from typing import Iterable, Callable
-from os import PathLike
-from enum import Enum
 from collections import defaultdict
-
+from enum import Enum
+from functools import wraps
+from os import PathLike
+from pathlib import Path
+from typing import Callable, Iterable
 
 # vm segement to assemble pre-defined register
 registers = {
@@ -74,11 +73,12 @@ class Label:
 
         self.address = "@{}".format(label)
         self.define = "({})".format(label)
+        self.ret = Label(f"{name}$ret")
 
 
 class Parser:
-    def __init__(self, filepath: PathLike):
-        self.filepath = filepath
+    def __init__(self, path: PathLike):
+        self.path = path
 
     def skip(self, code: Iterable[str], predicate: Callable[[str], bool]):
         for line in code:
@@ -98,8 +98,9 @@ class Parser:
         return code
 
     def read_code(self):
-        with open(self.filepath, "rt") as code:
-            yield from self.tidy(code)
+        for vm_file in Path(self.path).glob("*.vm"):
+            with open(vm_file, "rt") as code:
+                yield from self.tidy(code)
 
     def commands(self):
         for line in self.read_code():
@@ -108,8 +109,14 @@ class Parser:
 
 
 class Translator:
-    def init(self):
+    def bootstrap(self):
+        """
+        One of the OS libraries, called Sys.vm, includes a method called init.
+        The Sys.init function starts with some OS initialization code (we’ll deal with this
+        later, when we discuss the OS), then it does call Main.main
+        """
         yield from self.load_const(256, "SP")
+        yield from self.translate(["call", "Sys.init"])
 
     def load_const(self, const: int, to: str):
         """load a const to an arbitrary register
@@ -353,7 +360,7 @@ class Translator:
             "THIS": 2,
             "ARG": 3,
             "LCL": 4,
-            "R14": 5, # return address
+            "R14": 5,  # return address
         }
 
         for register, offset in saved_registers.items():
@@ -373,6 +380,21 @@ class Translator:
         yield from self.address_pointer("R14")
         yield "0;JMP"
 
+    def call(self, function_name: str):
+        """
+        call Bar.mult 2
+
+        will be translated to:
+
+        // assembly code that saves the caller’s state on the stack,
+        // sets up for the function call, and then:
+            goto Bar.mult // (in assembly)
+        (Foo$ret.1) // created and plugged by the translator
+        """
+        label = Label(function_name)
+
+        yield label.ret.address
+
     def translate(self, tokens: list[str]):
         match tokens:
             case ["return"]:
@@ -389,6 +411,9 @@ class Translator:
                 yield from self.arithmetic(operator)
             case ["function", name, n_vars]:
                 yield from self.function(name, int(n_vars))
+            case ["call", name]:
+                raise Exception("todo")
+                # yield from self.call(name)
             case _:
                 raise Exception(f"WTF is {tokens}")
 
@@ -396,13 +421,14 @@ class Translator:
 if __name__ == "__main__":
     import sys
 
-    vm_file = Path(sys.argv[1])
-    asm_file = vm_file.with_suffix(".asm")
+    program_folder = Path(sys.argv[1])
+    assert program_folder.is_dir()
+    asm_file = Path(".") / (program_folder.name + ".asm")
     translator = Translator()
     with open(asm_file, "wt+") as out:
-        for code in translator.init():
+        for code in translator.bootstrap():
             out.write(code + "\n")
 
-        for tokens in Parser(vm_file).commands():
+        for tokens in Parser(program_folder).commands():
             for code in translator.translate(tokens):
                 out.write(code + "\n")
