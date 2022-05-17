@@ -1,8 +1,9 @@
-from functools import wraps
-from pathlib import Path
-from typing import Iterable, Callable
-from os import PathLike
 from collections import UserDict
+from functools import wraps
+from os import PathLike
+from pathlib import Path
+from typing import Callable, Iterable
+
 
 # why UserDict?
 # see https://stackoverflow.com/questions/7148419/subclass-dict-userdict-dict-or-abc
@@ -10,6 +11,7 @@ class SymbolTable(UserDict[str, int]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        # usually access R13 ~ R15
         for i in range(16):
             self[f"R{i}"] = i
 
