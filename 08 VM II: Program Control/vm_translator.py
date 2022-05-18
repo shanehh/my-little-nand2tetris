@@ -120,6 +120,13 @@ class Translator:
         later, when we discuss the OS), then it does call Main.main
         """
         yield from self.load_const(256, "SP")
+        # Setting the LCL, ARG, THIS and THAT point­ers to known illegal values
+        # helps identify when a pointer is used before it is initial­ized.
+        yield from self.load_const(-1, "LCL")
+        yield from self.load_const(-2, "ARG")
+        yield from self.load_const(-3, "THIS")
+        yield from self.load_const(-4, "THAT")
+
         # call Sys.init
         # 其实也可以这样写
         # # yield from self.translate(["goto", "Sys.init"])
@@ -136,8 +143,14 @@ class Translator:
             const (int): a number
             to (str, optional): the name of register.
         """
-        yield "@{}".format(const)
-        yield "D=A"
+        if const < 0:
+            yield "@{}".format(abs(const))
+            yield "D=A"
+            yield "D=-D"
+        else:
+            yield "@{}".format(const)
+            yield "D=A"
+
         if to != "D":
             yield "@{}".format(to)
             yield "M=D"
@@ -346,35 +359,27 @@ class Translator:
         ARG = *(endFrame - 3)       // restores ARG of the caller
         LCL = *(endFrame - 4)       // restores LCL of the caller
         goto retAddr                // goes to the caller's return address
+
+
+        Functions with no arguments return to correct RIP (Return Instruction Point) with correct return value on stack.
+        This can fail if the RIP is not correctly pushed on the stack by the calling code,
+        or if the returning code does not store the RIP in a temporary register before overwriting it with the return value.
+
+        无参数的 function
+        RIP 被 return value 覆盖了，解决这个 bug 花费了我四五个钟头
         """
-        # let's *ARG = pop()// repositions the return value for the caller
-        # also can write as:
-        # # yield from self.translate(["pop","argument", "0"])
-        yield from self.stack_pop("D")
-        yield from self.address_pointer("ARG")
-        yield "M=D"
-
-        # SP = ARG + 1 // repositions SP of the caller
-        yield "@ARG"
-        yield "D=M+1"
-        yield "@SP"
-        yield "M=D"
-
         # endFrame(R13) = LCL // endframe is a temporary variable
         yield "@LCL"
         yield "D=M"
         yield "@R13"
         yield "M=D"
 
-        saved_registers = {
-            "THAT": 1,
-            "THIS": 2,
-            "ARG": 3,
-            "LCL": 4,
-            "R14": 5,  # return address
-        }
-
-        for register, offset in saved_registers.items():
+        def restore(register: str, offset: int):
+            """
+            restores registers of the caller
+            e.g.
+            THAT = ROM[endFrame – 1] // restores THAT of the caller
+            """
             yield "@R13"  # endFrame
             yield "D=M"
             if offset == 1:
@@ -387,7 +392,37 @@ class Translator:
             yield f"@{register}"
             yield "M=D"
 
-        # goto *R14
+        # save return address to temporary register
+        yield from restore("R14", 5)
+
+        # let's *ARG = pop() // repositions the return value for the caller
+        # also can write as:
+        # # yield from self.translate(["pop","argument", "0"])
+        #
+        # 但有一种特殊 case，当 nArgs 为 0 时(Functions with no arguments)
+        # ARG 和 return address/RIP(Return Instruction Point) 便会共用一个地址
+        # # ARG = SP-5-nArgs // Repositions ARG
+        # 解决方案：
+        # 等 return address 放入 temporary register，再 pop
+        # 所有现在这个代码 layout 是有讲究的
+        yield from self.stack_pop("D")
+        yield from self.address_pointer("ARG")
+        yield "M=D"
+
+        # SP = ARG + 1 // repositions SP of the caller
+        yield "@ARG"
+        yield "D=M+1"
+        yield "@SP"
+        yield "M=D"
+
+        # continue some restorings
+        yield from restore("THAT", 1)
+        yield from restore("THIS", 2)
+        yield from restore("ARG", 3)
+        yield from restore("LCL", 4)
+
+        # finally, goodbye，I'm go home now
+        # goto *R14(ROM[R14] is saved return address)
         yield from self.address_pointer("R14")
         yield "0;JMP"
 
@@ -420,8 +455,9 @@ class Translator:
         yield "D=M"
         yield "@5"
         yield "D=D-A"
-        yield f"@{n_args}"
-        yield "D=D-A"
+        if n_args > 0:
+            yield f"@{n_args}"
+            yield "D=D-A"
         yield "@ARG"
         yield "M=D"
 
