@@ -45,10 +45,11 @@ operator_symbols = {
 
 class IncrementTable:
     def __init__(self):
-        self.store: dict[int, int] = {}
+        # index and filename
+        self.store = {}
         self.count = 0
 
-    def get(self, index: int) -> int:
+    def get(self, index: str) -> int:
         if index in self.store:
             return self.store[index]
         else:
@@ -101,15 +102,15 @@ class Parser:
         code = self.skip(code, lambda line: len(line) == 0)
         return code
 
-    def read_code(self):
+    def commands(self):
+        """
+        yield tokens and the filename
+        """
         for vm_file in Path(self.path).glob("*.vm"):
             with open(vm_file, "rt") as code:
-                yield from self.tidy(code)
-
-    def commands(self):
-        for line in self.read_code():
-            tokens = line.split()
-            yield tokens
+                for line in self.tidy(code):
+                    tokens = line.split()
+                    yield tokens, vm_file.stem
 
 
 class Translator:
@@ -190,6 +191,42 @@ class Translator:
         else:
             yield f"{what}=M"
 
+    def static_push_pop(self, action: str, index: int, filename: str):
+        """
+        // File Foo.vm
+        pop static 5
+
+        =>
+
+        D = stack.pop (code omitted)
+        @Foo.5
+        M=D
+
+        static variables should be seen by all the methods in a program
+
+        solution:
+
+        1. Have the VM translator translate each VM reference
+        static i (in file Foo.vm) into an assembly reference Foo.i
+        2. Following assembly, the Hack assembler will map these
+        references onto RAM[16], RAM[17], ..., RAM[255]
+        3. Therefore, the entries of the static segment will end up
+        being mapped onto RAM[16], RAM[17], ..., RAM[255],
+        in the order in which they appear in the program.
+        """
+        assert 0 <= index <= 255 - 16 + 1
+        # figure out actual index
+        index = registers["static"] + increment_table.get(f"{filename}.{index}")
+        match action:
+            case "pop":
+                yield from self.stack_pop("D")
+                yield "@{}".format(index)
+                yield "M=D"
+            case "push":
+                yield "@{}".format(index)
+                yield "D=M"
+                yield from self.stack_push("D")
+
     def push_pop(self, action: str, segment: str, index: int):
         match segment:
             case "constant":
@@ -223,20 +260,6 @@ class Translator:
                         yield "M=D"
                     case "push":
                         yield "@{}".format(register)
-                        yield "D=M"
-                        yield from self.stack_push("D")
-
-            case "static":
-                assert 0 <= index <= 255 - 16 + 1
-                # figure out actual index
-                index = registers[segment] + increment_table.get(index)
-                match action:
-                    case "pop":
-                        yield from self.stack_pop("D")
-                        yield "@{}".format(index)
-                        yield "M=D"
-                    case "push":
-                        yield "@{}".format(index)
                         yield "D=M"
                         yield from self.stack_push("D")
 
@@ -473,10 +496,12 @@ class Translator:
         # (retAddrLabel) // the same translator-generated label
         yield label.ret.define
 
-    def translate(self, tokens: list[str]):
+    def translate(self, tokens: list[str], filename: str = None):
         match tokens:
             case ["return"]:
                 yield from self.ret()
+            case ["push" | "pop" as action, "static", index]:
+                yield from self.static_push_pop(action, int(index), filename)
             case ["push" | "pop" as action, segment, index]:
                 yield from self.push_pop(action, segment, int(index))
             case ["label", name]:
@@ -506,6 +531,6 @@ if __name__ == "__main__":
         for code in translator.bootstrap():
             out.write(code + "\n")
 
-        for tokens in Parser(program_folder).commands():
-            for code in translator.translate(tokens):
+        for tokens, filename in Parser(program_folder).commands():
+            for code in translator.translate(tokens, filename):
                 out.write(code + "\n")
